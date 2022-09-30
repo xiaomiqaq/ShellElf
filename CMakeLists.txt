@@ -9,7 +9,7 @@ set(Packer_src
         packer64/main.cpp 
         packer64/ELFImage.cpp)
 
-add_executable(MyPacker ${Packer_src})
+add_executable(Packer ${Packer_src})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

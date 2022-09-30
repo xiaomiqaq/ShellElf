@@ -15,18 +15,18 @@ ELFImage::ELFImage(const char* filename)
 	fin.seekg(0,ios::end);
 	fsize = (size_t)fin.tellg();
 	fin.seekg(0,ios::beg);
-	m_fileBuffer.buf = new u_char[fsize];
-	fin.read((char *)m_fileBuffer.buf,fsize);
+	m_fileBuffer = new u_char[fsize];
+	fin.read((char*)m_fileBuffer,fsize);
 	fin.close();
 
-	m_fileBuffer.size = fsize;
+
 	InitStringTable();
 	InitSecTable();
 }
 void ELFImage::InitSecTable()
 {
 	 
-	m_eh = *(Elf64_Ehdr*)(m_fileBuffer.buf);
+	m_eh = *(Elf64_Ehdr*)(m_fileBuffer);
 	int secNum = FileHeader()->e_shnum;
 	ELFSection sec;
 	for(int i=0;i<secNum;i++)
@@ -36,7 +36,7 @@ void ELFImage::InitSecTable()
 		if(dataSize>0)
 		{
 			Byte* buf = new Byte[dataSize];
-			memcpy(buf,m_fileBuffer.buf+sec.header.sh_offset,dataSize);
+			memcpy(buf,m_fileBuffer+sec.header.sh_offset,dataSize);
 			sec.data = buf;
 		}
 		m_secTable.push_back(sec);
@@ -57,7 +57,7 @@ void ELFImage::InitSecTable()
 
 ELFImage::~ELFImage()
 {
-	free(m_fileBuffer.buf);
+	free(m_fileBuffer);
 }
 void ELFImage::InitStringTable()
 {
@@ -68,7 +68,7 @@ void ELFImage::InitStringTable()
 	char* baseAddr = (char*)strTable.sh_offset;
 	for(int i=1;i<strTable.sh_size;i++)
 	{
-		char currChar = *((size_t)m_fileBuffer.buf + baseAddr + i);
+		char currChar = *((size_t)m_fileBuffer + baseAddr + i);
 		tmp[tmp_index++] = currChar;
 		if(currChar=='\0')
 		{
@@ -80,15 +80,15 @@ void ELFImage::InitStringTable()
 
 Elf64_Ehdr* ELFImage::FileHeader()
 {
-	return (Elf64_Ehdr*)m_fileBuffer.buf;
+	return (Elf64_Ehdr*)m_fileBuffer;
 }
 Elf64_Shdr* ELFImage::SectionHeader()
 {
-	return (Elf64_Shdr*)(m_fileBuffer.buf+FileHeader()->e_shoff);
+	return (Elf64_Shdr*)(m_fileBuffer+FileHeader()->e_shoff);
 }
 Elf64_Phdr* ELFImage::ProgramHeader()
 {
-	return (Elf64_Phdr*)(m_fileBuffer.buf+FileHeader()->e_phoff);
+	return (Elf64_Phdr*)(m_fileBuffer+FileHeader()->e_phoff);
 }
 Elf64_Shdr* ELFImage::GetSectHeaderByName(std::string name)
 {
@@ -111,7 +111,7 @@ Elf64_Phdr* ELFImage::GetProgramHeader(Elf64_Word type, Elf64_Word flag)
 
 bool ELFImage::DeleteUseless()
 {
-	if(!m_fileBuffer.buf) return false;
+	if(!m_fileBuffer) return false;
 	size_t newBuffSize=0;
 	int phentNum = FileHeader()->e_phnum;
 	Elf64_Phdr lastPh = ProgramHeader()[phentNum-1];
@@ -125,9 +125,9 @@ bool ELFImage::DeleteUseless()
 	}
 
 	Byte *newElfBuf = (Byte*)malloc(newBuffSize);
-	memcpy(newElfBuf, m_fileBuffer.buf, newBuffSize);
-	free(m_fileBuffer.buf);
-	m_fileBuffer.buf = newElfBuf;
+	memcpy(newElfBuf, m_fileBuffer, newBuffSize);
+	free(m_fileBuffer);
+	m_fileBuffer = newElfBuf;
 	m_fileBuffer.size = newBuffSize;
 	return true;
 }
@@ -175,12 +175,12 @@ bool ELFImage::GenerateElfFile(const char* filename)
 	app_phdr.p_align =  0x200000;
 	outputFile.write((char*)&app_phdr,sizeof(app_phdr));
 
-	outputFile.write((char*)m_fileBuffer.buf,m_fileBuffer.size);
+	outputFile.write((char*)m_fileBuffer,m_fileBuffer.size);
 
 	return true;
 }
 
-void ELFImage::InsertShell(Buffer shellBuf)
+void ELFImage::InsertShell(Byte* shellBuf)
 {
 	//make shell
 	//modi eh
@@ -189,7 +189,7 @@ void ELFImage::InsertShell(Buffer shellBuf)
 	Elf64_Phdr* ph = GetProgramHeader(PT_LOAD,PF_R|PF_X);
 
 	Elf64_Shdr* textSec = GetSectHeaderByName(".text");
-	size_t textSecHeaderOff = (size_t)textSec-(size_t)m_fileBuffer.buf;
+	size_t textSecHeaderOff = (size_t)textSec-(size_t)m_fileBuffer;
 	Elf64_Shdr shellSH;
 	PushToShtr(".shell");
 	shellSH.sh_name = GetShStrIndex(".shell");
@@ -209,11 +209,25 @@ void ELFImage::InsertShell(Buffer shellBuf)
 	
 }
 
+void ELFImage::AddShell(ELFImage shell)
+{
+	// Elf64_Shdr *shellTextSH = shell.GetSectHeaderByName(".text");
+	// Byte *shellTextData = (Byte*)malloc(shellTextSH->sh_size);
+	// memcpy(shellTextData,shell.m_fileBuffer + shellTextSH->sh_offset , shellTextSH->sh_size);
+
+	// Elf64_Phdr *ph = GetProgramHeader(PT_LOAD,PF_R|PF_X);
+	// ph->p_memsz += shellTextSH->sh_size;
+	// ph->p_filesz += shellTextSH->sh_size;
+	// memcpy(m_fileBuffer+ph->p_offset+ph->p_memsz, shellTextData, shellTextSH->sh_size);
+
+	// free(shellTextData);
+
+}
 
 void ELFImage::BuildFile(const char* name)
 {
 	ofstream ofs(name,ofstream::out|ofstream::binary);
-	ofs.write((char*)m_fileBuffer.buf,m_fileBuffer.size);
+	ofs.write((char*)m_fileBuffer,m_fileBuffer.size);
 	//size_t totalSize = m_eh.e_shoff + sizeof(Elf64_Shdr)*m_secTable.size();
 	//char* newFileBuf = (char*)malloc(totalSize);
 
@@ -249,7 +263,7 @@ std::string ELFImage::GetShStr(Elf64_Word index)
 	Elf64_Shdr shStrTab = SectionHeader()[FileHeader()->e_shstrndx];
 	char tmp[128];
 	std::string ret;
-	Byte* dataAddr = (Byte*)(m_fileBuffer.buf + shStrTab.sh_offset);
+	Byte* dataAddr = (Byte*)(m_fileBuffer + shStrTab.sh_offset);
 	for(int i=0;i<128;i++)
 	{
 		char c = *(char*)(dataAddr + index + i);
@@ -280,7 +294,7 @@ Elf64_Word ELFImage::GetShStrIndex(std::string str)
 	char tmp[128];
 	int tmp_ind = 0;
 	std::string ret;
-	Byte* dataAddr = (Byte*)(m_fileBuffer.buf + header->sh_offset);
+	Byte* dataAddr = (Byte*)(m_fileBuffer + header->sh_offset);
 	for(int i=0;i<header->sh_size ;i++)
 	{
 		tmp[tmp_ind] = *(char*)(dataAddr+i);

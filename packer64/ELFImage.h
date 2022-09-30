@@ -12,24 +12,6 @@ typedef struct
 }ELFSection;
 
 
-typedef struct Buffer
-{
-    Byte* buf;
-    size_t size;
-
-    void Insert(Buffer appendBuf,size_t index)
-    {
-        size_t newSize = size+appendBuf.size;
-        Byte* newBuf = (Byte*)malloc(newSize);
-
-        memcpy(newBuf,buf,index);
-        memcpy(newBuf+index,appendBuf.buf,appendBuf.size);
-        memcpy(newBuf+index+appendBuf.size,buf+index,size-index);
-        free(buf);
-        size=newSize;
-        buf = newBuf;
-    }
-}Buffer;
 
 class ELFImage
 {
@@ -54,12 +36,13 @@ public:
     Elf64_Shdr* GetSectHeaderByName(std::string name);
 
     //write
-    void InsertShell(Buffer shellBuf);
+    void InsertShell(Byte* shellBuf);
+    void AddShell(ELFImage shell);
     void BuildFile(const char *name);
 
     
-private:
-    Buffer m_fileBuffer;  
+public:
+    Byte* m_fileBuffer;  
 
     std::vector<ELFSection> m_secTable;
     std::vector<Elf64_Phdr> m_phTable;

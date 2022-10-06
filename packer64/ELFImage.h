@@ -17,7 +17,7 @@ class ELFImage
 {
 public:
     ELFImage(const char* filename);
-    ~ELFImage();
+    ~ELFImage();      
 
     void InitStringTable();
     void InitSecTable();

@@ -43,11 +43,9 @@ public:
     
 public:
     Byte* m_fileBuffer;  
-
     std::vector<ELFSection> m_secTable;
     std::vector<Elf64_Phdr> m_phTable;
     Elf64_Ehdr m_eh;
-
 
     //int m_fileBuffer.size ;
     std::vector<std::string> m_shtrTable;

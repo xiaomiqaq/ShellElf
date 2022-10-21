@@ -109,10 +109,7 @@ Elf64_Phdr* ELFImage::GetProgramHeader(Elf64_Word type, Elf64_Word flag)
 	return nullptr;
 }
 
-bool ELFImage::DeleteUseless()
-{
 
-}
 
 bool ELFImage::GenerateElfFile(const char* filename)
 {

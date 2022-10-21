@@ -1,7 +1,18 @@
 #include <stdio.h>
 
+void shell()
+{
+    char s[50];
+    scanf("%s",s);
+    printf("%s\n",s);
+}
+void Hell0()
+{
+    printf("hello!\n");
+}
 int main()
 {
-    printf("hello  1 \n");
-    printf("hello  2 \n");
+    Hell0();
+    return 1;
+
 }

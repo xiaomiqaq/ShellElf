@@ -1,5 +1,6 @@
 #include "packer.h"
 #include "pch.h"
+#include "ShellUtil.h"
 uint8_t *loader_data;
 size_t loader_size = 0;
 
@@ -22,11 +23,13 @@ Packer::Packer(ELFImage &elf_image)
     elf = ElfUtil::map_elf(elf_image);
 }
 
-void Packer::encypt()
+void Packer::encypt(size_t size)
 {
     int id = get_section_text(&elf);
+    elf.shdr[id].sh_flags =  elf.shdr[id].sh_flags | SHF_WRITE;
     uint8_t *data = elf.section_data[id];
-    for(int i=0;i<0x1000;i++)
+    printf("text addr: %x\n",elf.shdr[id].sh_addr);
+    for(int i=0; i < size; i++)
     {
       *(data+i) = *(data+i) ^ 0x15;
     }
@@ -37,75 +40,33 @@ void Packer::load_shell(ELFImage &shell_image)
     shell = ElfUtil::map_elf(shell_image);
     uint16_t last_ptload = ElfUtil::GetLastPtload(elf);
     Elf64_Addr shell_va = elf.phdr[last_ptload].p_vaddr + elf.phdr[last_ptload].p_memsz;
-    add_jump(shell_va, elf.header->e_entry);
-    shell_reloc(shell_va);
+    ShellUtil::shell_reloc(shell,shell_va);
     shell_pack(shell_va);
+    //add_jump(shell_va, elf.header->e_entry);
 }
 void Packer::shell_pack(Elf64_Addr shell_va)
 {
-  //shell = text + data
-    loader_size = shell.shdr[1].sh_size + shell.shdr[3].sh_size;
+  //shell = text + data + 4
+    loader_size = shell.shdr[1].sh_size + shell.shdr[3].sh_size ;
     loader_data = (uint8_t*)malloc(loader_size);
     memcpy(loader_data, shell.section_data[1], shell.shdr[1].sh_size);
     memcpy(loader_data + shell.shdr[1].sh_size , shell.section_data[3],shell.shdr[3].sh_size);
 }
 void Packer::add_jump(Elf64_Addr shell_va, Elf64_Addr entry)
 {
-    //Elf64_Addr b_addr = shell_va + shell.shdr[1].sh_size ;
-    Elf64_Addr b_addr = shell_va + shell.shdr[1].sh_size - 4;
+    Elf64_Addr b_addr = shell_va + shell.shdr[1].sh_size ;
+    //Elf64_Addr b_addr = shell_va + shell.shdr[1].sh_size - 4;
     JmpInstruction b;
     b.offset = (entry - b_addr)/4;
     b.op = 0x17;
     realloc(shell.section_data[1],shell.shdr[1].sh_size + 4);
+    //memcpy(shell.section_data[1] + shell.shdr[1].sh_size - 4 , &b, 4);
     memcpy(shell.section_data[1] + shell.shdr[1].sh_size - 4 , &b, 4);
 
     shell.shdr[1].sh_size = shell.shdr[1].sh_size + 4;
 }
-void Packer::shell_reloc(Elf64_Addr shell_va)
-{
-    Elf64_Shdr sh = shell.shdr[2];
-    if(sh.sh_type != SHT_RELA) return;
-    uint8_t *reloc_table = shell.section_data[2];
-    uint8_t *text_data = shell.section_data[1];
-    for(int offset = 0 ; offset < sh.sh_size ; offset += sh.sh_entsize)
-    {
-      Elf64_Rela *rela = (Elf64_Rela*)(reloc_table + offset);
-      u_int type = ELF64_R_TYPE(rela->r_info);
-      if(type == R_AARCH64_ADR_PREL_PG_HI21)
-      {
-        adrp_reloc(rela,shell_va);
-      }else if(type == R_AARCH64_ADD_ABS_LO12_NC){
-        add_reloc(rela,shell_va);
-      }
-    }
-}
-void Packer::adrp_reloc(Elf64_Rela *rele,Elf64_Addr shell_va)
-{
-  int shell_text_id = 1, data_id=3;
-  //1. get page offset
-  uint16_t elf_text_id = get_section_text(&elf);
-  uint32_t sym_id = ELF64_R_SYM(rele->r_info);
-  if(shell_va + shell.shdr[elf_text_id].sh_size  > (to_page(shell_va) +1) *0x1000 )
-  {
-    AdrpInstruction *adrp = (AdrpInstruction*)(shell.section_data[shell_text_id] + rele->r_offset);
-    adrp->immlo ++;
-  }
-}
-void Packer::add_reloc(Elf64_Rela *rela,Elf64_Addr shell_va)
-{
-  int shell_text_id = 1;
-  Elf64_Sym *symbol = (Elf64_Sym*)shell.section_data[9];
-  int sys_id = ELF64_R_SYM(rela->r_info);
-  //add_offset --- data's offset 
-  Elf64_Addr  offset = shell.shdr[shell_text_id].sh_size + symbol[sys_id].st_value;
-  uint imm = shell_va%0x1000 + offset;
-  AddInstruction *add = (AddInstruction*) (shell.section_data[shell_text_id] + rela->r_offset);
-  add->imml = imm;
-}
-uint Packer::get_shell_size()
-{
-  return 1;
-}
+
+
 void Packer::change_entry(uint16_t last_section)
 {
   int8_t last_ptload = ElfUtil::GetLastPtload(elf);
@@ -203,7 +164,7 @@ static uint64_t	off = 0;
 void Packer::write_file(const char* fileName)
 {
   int id = get_section_text(&elf);
-    uint8_t *data = elf.section_data[id];
+  uint8_t *data = elf.section_data[id];
   int fd;
 
   if ((fd = open(fileName, O_CREAT | O_WRONLY, 0744)) < 0) {
@@ -230,7 +191,7 @@ void Packer::write_file(const char* fileName)
 
   close(fd);
 
-  printf("file created: '%s'\n", "FILENAME");
+  printf("file created: '%s'\n", fileName);
 }
 
  void Packer::write_to_file(int fd, void *data, uint64_t size)

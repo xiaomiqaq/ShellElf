@@ -12,7 +12,7 @@ public:
     Packer(ELFImage &elf_image);
 
     //encypt
-    void encypt();
+    void encypt(size_t size);
     //insert
     void    change_entry(uint16_t last_section);
     int32_t	create_section( uint16_t last_section, uint16_t last_ptload);
@@ -21,10 +21,8 @@ public:
     void load_shell(ELFImage &shell_image);
     void shell_pack(Elf64_Addr shell_va);
     void add_jump(Elf64_Addr shell_va, Elf64_Addr entry);
-    void shell_reloc(Elf64_Addr shell_va);
-    void adrp_reloc(Elf64_Rela *rele,Elf64_Addr shell_va);
-    void add_reloc( Elf64_Rela *rela,Elf64_Addr shell_va);
-    uint get_shell_size();
+
+
     
     //write
     static  void	write_to_file(int fd, void *data, uint64_t size);
